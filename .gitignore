@@ -15,3 +15,4 @@ secureKey.json
 # 환경 변수 파일
 .env
 .env.local
+SECRET_FILES_GUIDE.md
