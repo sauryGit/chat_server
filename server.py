@@ -128,14 +128,13 @@ class Message(BaseModel):
 @app.post("/send")
 async def send_message(msg: Message, background_tasks: BackgroundTasks):
     doc_ref = db.collection("messages").document()
-    timestamp = datetime.now()
     doc_id = doc_ref.id
     
-    # Firestore에 저장
+    # Firestore에 저장 (서버 타임스탬프 사용)
     doc_ref.set({
         "nickname": msg.nickname,
         "content": msg.content,
-        "timestamp": timestamp
+        "timestamp": firestore.SERVER_TIMESTAMP
     })
     
     # WebSocket으로 모든 클라이언트에 브로드캐스팅
@@ -143,7 +142,6 @@ async def send_message(msg: Message, background_tasks: BackgroundTasks):
         "id": doc_id,
         "nickname": msg.nickname,
         "content": msg.content,
-        "timestamp": timestamp.isoformat()
     }
     await manager.broadcast(message_data)
     
@@ -167,15 +165,14 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json({"error": "잘못된 메시지 형식"})
                 continue
             
-            # Firestore에 저장
+            # Firestore에 저장 (서버 타임스탬프 사용)
             doc_ref = db.collection("messages").document()
-            timestamp = datetime.now()
             doc_id = doc_ref.id
             
             doc_ref.set({
                 "nickname": message_dict["nickname"],
                 "content": message_dict["content"],
-                "timestamp": timestamp
+                "timestamp": firestore.SERVER_TIMESTAMP
             })
             
             # 모든 클라이언트에 브로드캐스팅
@@ -183,7 +180,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 "id": doc_id,
                 "nickname": message_dict["nickname"],
                 "content": message_dict["content"],
-                "timestamp": timestamp.isoformat()
             }
             await manager.broadcast(message_data)
 

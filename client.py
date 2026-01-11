@@ -19,8 +19,8 @@ else:
 async def main(page: ft.Page):
     page.title = "스피드 비동기 채팅 🚀"
     page.theme_mode = ft.ThemeMode.LIGHT
-    page.window_width = 400
-    page.window_height = 700
+    page.window.width = 400
+    page.window.height = 700
     page.vertical_alignment = ft.MainAxisAlignment.CENTER
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
 
@@ -84,7 +84,8 @@ async def main(page: ft.Page):
                                 msg.get("nickname", "알 수 없음"),
                                 msg.get("content", "..."),
                             )
-                        page.update() # 메시지들이 추가될 때마다 화면 업데이트
+                    page.update()
+
         except Exception as e:
             print(f"초기 메시지 로드 에러: {e}")
 
