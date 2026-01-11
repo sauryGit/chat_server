@@ -19,7 +19,7 @@ else:
 
 
 async def main(page: ft.Page):
-    page.title = "스피드 비동기 채팅 🚀"
+    page.title = "Bamboo Forest"
     
     # --- 폰트 설정 ---
     page.fonts = {
@@ -58,19 +58,37 @@ async def main(page: ft.Page):
 
         is_me = nickname == user_nickname[0]
         
+        # 현재 테마 모드 감지
+        is_dark_mode = page.theme_mode == ft.ThemeMode.DARK or (
+            page.theme_mode == ft.ThemeMode.SYSTEM and page.platform_brightness == ft.Brightness.DARK
+        )
+
         if is_me:
-            bg_color = ft.Colors.BLUE_400
+            # 내 메시지: 다크모드면 조금 더 어두운 파란색
+            bg_color = ft.Colors.BLUE_800 if is_dark_mode else ft.Colors.BLUE_400
         else:
-            # 닉네임에 따라 색상 결정 (간단한 해시 알고리즘)
-            color_palette = [
+            # 라이트 모드용 팔레트 (기존)
+            light_palette = [
                 ft.Colors.CYAN_400, ft.Colors.PINK_400, ft.Colors.PURPLE_400,
                 ft.Colors.DEEP_PURPLE_400, ft.Colors.INDIGO_400, ft.Colors.CYAN_400,
                 ft.Colors.TEAL_400, ft.Colors.GREEN_400, ft.Colors.LIME_400,
                 ft.Colors.AMBER_400, ft.Colors.ORANGE_400, ft.Colors.BROWN_400,
                 ft.Colors.BLUE_GREY_400,
             ]
-            color_index = sum(ord(c) for c in nickname) % len(color_palette)
-            bg_color = color_palette[color_index]
+            
+            # 다크 모드용 팔레트 (톤 다운된 색상)
+            dark_palette = [
+                ft.Colors.CYAN_900, ft.Colors.PINK_900, ft.Colors.PURPLE_900,
+                ft.Colors.DEEP_PURPLE_900, ft.Colors.INDIGO_900, ft.Colors.CYAN_900,
+                ft.Colors.TEAL_900, ft.Colors.GREEN_900, ft.Colors.LIME_900,
+                ft.Colors.AMBER_900, ft.Colors.ORANGE_900, ft.Colors.BROWN_900,
+                ft.Colors.BLUE_GREY_900,
+            ]
+
+            current_palette = dark_palette if is_dark_mode else light_palette
+            
+            color_index = sum(ord(c) for c in nickname) % len(current_palette)
+            bg_color = current_palette[color_index]
 
         text_color = ft.Colors.WHITE
         
@@ -94,9 +112,9 @@ async def main(page: ft.Page):
                 time_str = ""
 
 
-        header_controls = [ft.Text(nickname, size=14, color=ft.Colors.BLACK_87, weight=ft.FontWeight.BOLD)]
+        header_controls = [ft.Text(nickname, size=14, color=ft.Colors.BLACK_87, weight=ft.FontWeight.BOLD, selectable=True)]
         if time_str:
-            header_controls.append(ft.Text(time_str, size=12, color=ft.Colors.BLACK_45))
+            header_controls.append(ft.Text(time_str, size=12, color=ft.Colors.BLACK_45, selectable=True))
 
         chat_list.controls.append(
             ft.Row(
@@ -105,7 +123,7 @@ async def main(page: ft.Page):
                         content=ft.Column(
                             [
                                 ft.Row(header_controls, spacing=5),
-                                ft.Text(content, color=text_color, size=16),
+                                ft.Text(content, color=text_color, size=16, selectable=True),
                             ],
                             spacing=2,
                         ),
