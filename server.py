@@ -142,7 +142,6 @@ async def send_message(msg: Message, background_tasks: BackgroundTasks):
         "id": doc_id,
         "nickname": msg.nickname,
         "content": msg.content,
-        "timestamp": datetime.now().isoformat()
     }
     await manager.broadcast(message_data)
     
@@ -181,7 +180,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 "id": doc_id,
                 "nickname": message_dict["nickname"],
                 "content": message_dict["content"],
-                "timestamp": datetime.now().isoformat()
             }
             await manager.broadcast(message_data)
 
