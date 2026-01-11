@@ -27,7 +27,8 @@ async def main(page: ft.Page):
     }
     page.theme = ft.Theme(font_family="pretendard")
     
-    page.theme_mode = ft.ThemeMode.LIGHT
+    # 운영체제 설정(다크/라이트)을 자동으로 따르도록 설정
+    page.theme_mode = ft.ThemeMode.SYSTEM
     page.window.width = 400
     page.window.height = 700
     page.vertical_alignment = ft.MainAxisAlignment.CENTER
@@ -278,13 +279,14 @@ async def main(page: ft.Page):
                     ft.Row(
                         [
                             ft.Text(f"   {user_nickname[0]}", size=16, weight=ft.FontWeight.BOLD),
-                            ft.IconButton(
-                                icon=ft.Icons.NAVIGATION,
+                            ft.Button(
+                                "Go to page",
                                 on_click=lambda _: webbrowser.open(target_url),
-                                tooltip="웹사이트 열기",
-                                icon_size=25,
-                                visual_density=ft.VisualDensity.COMPACT,
-                                alignment=ft.Alignment.CENTER,
+                                style=ft.ButtonStyle(
+                                    padding=ft.Padding(10, 5, 10, 5),
+                                    shape=ft.RoundedRectangleBorder(radius=8),
+                                ),
+                                margin=ft.Margin(10,0,0,0)
                             ),
                         ],
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
