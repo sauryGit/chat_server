@@ -4,7 +4,7 @@ import asyncio
 import json
 import os
 import webbrowser
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 # --- 서버 URL 설정 ---
 RENDER_SERVER_URL = os.getenv("RENDER_SERVER_URL", "https://chat-server-x4o4.onrender.com")
@@ -20,6 +20,13 @@ else:
 
 async def main(page: ft.Page):
     page.title = "스피드 비동기 채팅 🚀"
+    
+    # --- 폰트 설정 ---
+    page.fonts = {
+        "pretendard": "/fonts/Pretendard-Regular.ttf",
+    }
+    page.theme = ft.Theme(font_family="pretendard")
+    
     page.theme_mode = ft.ThemeMode.LIGHT
     page.window.width = 400
     page.window.height = 700
@@ -66,18 +73,29 @@ async def main(page: ft.Page):
 
         text_color = ft.Colors.WHITE
         
+        # 시간 포맷팅
         time_str = ""
         if timestamp:
             try:
+                # ISO 문자열을 datetime 객체로 변환
                 dt = datetime.fromisoformat(timestamp)
-                time_str = dt.strftime("%H:%M:%S")
+                
+                # 만약 타임존 정보가 없다면 UTC로 가정
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                
+                # 한국 시간(KST, UTC+9)으로 변환
+                kst_timezone = timezone(timedelta(hours=9))
+                dt_kst = dt.astimezone(kst_timezone)
+                
+                time_str = dt_kst.strftime("%H:%M:%S")
             except ValueError:
                 time_str = ""
 
 
-        header_controls = [ft.Text(nickname, size=14, color=ft.Colors.BLACK_45, weight=ft.FontWeight.BOLD)]
+        header_controls = [ft.Text(nickname, size=14, color=ft.Colors.BLACK_87, weight=ft.FontWeight.BOLD)]
         if time_str:
-            header_controls.append(ft.Text(time_str, size=10, color=ft.Colors.GREY_400))
+            header_controls.append(ft.Text(time_str, size=12, color=ft.Colors.BLACK_45))
 
         chat_list.controls.append(
             ft.Row(
@@ -149,7 +167,7 @@ async def main(page: ft.Page):
                             message_data.get("id", ""),
                             message_data.get("nickname", "알 수 없음"),
                             message_data.get("content", "..."),
-                            message_data.get("timestamp", datetime.now().strftime("%H:%M:%S")),
+                            message_data.get("timestamp"),
                         )
                     except json.JSONDecodeError:
                         print(f"JSON 파싱 에러: {msg.data}")
@@ -259,14 +277,14 @@ async def main(page: ft.Page):
                 [
                     ft.Row(
                         [
-                            ft.Text(f"💬 {user_nickname[0]}", size=16, weight=ft.FontWeight.BOLD),
+                            ft.Text(f"   {user_nickname[0]}", size=16, weight=ft.FontWeight.BOLD),
                             ft.IconButton(
                                 icon=ft.Icons.NAVIGATION,
                                 on_click=lambda _: webbrowser.open(target_url),
                                 tooltip="웹사이트 열기",
                                 icon_size=25,
                                 visual_density=ft.VisualDensity.COMPACT,
-                                alignment=ft.Alignment.BOTTOM_CENTER,
+                                alignment=ft.Alignment.CENTER,
                             ),
                         ],
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -299,4 +317,4 @@ async def main(page: ft.Page):
     build_login_view()
 
 
-ft.run(main=main)
+ft.run(main=main, assets_dir="assets")
