@@ -3,6 +3,8 @@ import aiohttp
 import asyncio
 import json
 import os
+import webbrowser
+from datetime import datetime
 
 # --- 서버 URL 설정 ---
 RENDER_SERVER_URL = os.getenv("RENDER_SERVER_URL", "https://chat-server-x4o4.onrender.com")
@@ -39,7 +41,7 @@ async def main(page: ft.Page):
 
     # --- 함수 정의 ---
 
-    def display_message(msg_id: str, nickname: str, content: str):
+    def display_message(msg_id: str, nickname: str, content: str, timestamp: str = None):
         """채팅 메시지를 화면에 표시하는 함수"""
         if msg_id and msg_id in seen_message_ids:
             return
@@ -47,8 +49,35 @@ async def main(page: ft.Page):
             seen_message_ids.add(msg_id)
 
         is_me = nickname == user_nickname[0]
-        bg_color = ft.Colors.BLUE_400 if is_me else ft.Colors.GREY_400
+        
+        if is_me:
+            bg_color = ft.Colors.BLUE_400
+        else:
+            # 닉네임에 따라 색상 결정 (간단한 해시 알고리즘)
+            color_palette = [
+                ft.Colors.RED_400, ft.Colors.PINK_400, ft.Colors.PURPLE_400,
+                ft.Colors.DEEP_PURPLE_400, ft.Colors.INDIGO_400, ft.Colors.CYAN_400,
+                ft.Colors.TEAL_400, ft.Colors.GREEN_400, ft.Colors.LIME_400,
+                ft.Colors.AMBER_400, ft.Colors.ORANGE_400, ft.Colors.BROWN_400,
+                ft.Colors.BLUE_GREY_400,
+            ]
+            color_index = sum(ord(c) for c in nickname) % len(color_palette)
+            bg_color = color_palette[color_index]
+
         text_color = ft.Colors.WHITE
+        
+        time_str = ""
+        if timestamp:
+            try:
+                dt = datetime.fromisoformat(timestamp)
+                time_str = dt.strftime("%H:%M:%S")
+            except ValueError:
+                time_str = ""
+
+
+        header_controls = [ft.Text(nickname, size=14, color=ft.Colors.BLACK_45, weight=ft.FontWeight.BOLD)]
+        if time_str:
+            header_controls.append(ft.Text(time_str, size=10, color=ft.Colors.GREY_400))
 
         chat_list.controls.append(
             ft.Row(
@@ -56,7 +85,7 @@ async def main(page: ft.Page):
                     ft.Container(
                         content=ft.Column(
                             [
-                                ft.Text(nickname, size=10, color=ft.Colors.GREY_500),
+                                ft.Row(header_controls, spacing=5),
                                 ft.Text(content, color=text_color, size=16),
                             ],
                             spacing=2,
@@ -83,6 +112,7 @@ async def main(page: ft.Page):
                                 msg.get("id", ""),
                                 msg.get("nickname", "알 수 없음"),
                                 msg.get("content", "..."),
+                                msg.get("timestamp"),
                             )
                     page.update()
 
@@ -119,6 +149,7 @@ async def main(page: ft.Page):
                             message_data.get("id", ""),
                             message_data.get("nickname", "알 수 없음"),
                             message_data.get("content", "..."),
+                            message_data.get("timestamp"),
                         )
                     except json.JSONDecodeError:
                         print(f"JSON 파싱 에러: {msg.data}")
@@ -220,10 +251,27 @@ async def main(page: ft.Page):
 
     async def build_chat_view():
         """채팅 화면을 구성합니다."""
+        # 특정 URL 설정 (원하시는 URL로 변경하세요)
+        target_url = "https://bloob.io/yacht"
+
         page.add(
             ft.Row(
                 [
-                    ft.Text(f"💬 {user_nickname[0]}", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Row(
+                        [
+                            ft.Text(f"💬 {user_nickname[0]}", size=16, weight=ft.FontWeight.BOLD),
+                            ft.IconButton(
+                                icon=ft.Icons.NAVIGATION,
+                                on_click=lambda _: webbrowser.open(target_url),
+                                tooltip="웹사이트 열기",
+                                icon_size=25,
+                                visual_density=ft.VisualDensity.COMPACT,
+                                alignment=ft.Alignment.BOTTOM_CENTER,
+                            ),
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=0,
+                    ),
                     ft.IconButton(
                         icon=ft.Icons.LOGOUT,
                         on_click=logout_click,
