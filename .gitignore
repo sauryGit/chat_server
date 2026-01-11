@@ -16,3 +16,4 @@ secureKey.json
 .env
 .env.local
 SECRET_FILES_GUIDE.md
+README_copy.md
