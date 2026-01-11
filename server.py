@@ -1,7 +1,7 @@
 # server.py
 import firebase_admin
 from firebase_admin import credentials, firestore
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect, BackgroundTasks
 from pydantic import BaseModel
 from datetime import datetime
 import uvicorn
@@ -56,6 +56,38 @@ db = firestore.client()
 # 2. FastAPI 앱 생성
 app = FastAPI()
 
+# --- 백그라운드 작업 ---
+def cleanup_old_messages():
+    """DB에서 가장 오래된 메시지를 삭제하여 50개만 남기는 함수"""
+    try:
+        messages_ref = db.collection("messages")
+        
+        # 전체 메시지 수를 초과하는 가장 오래된 문서들을 가져옴
+        # timestamp를 기준으로 오름차순 정렬
+        docs_query = messages_ref.order_by("timestamp", direction=firestore.Query.ASCENDING)
+        
+        # 전체 문서 수를 가져오기 위해 모든 문서를 스트리밍
+        all_docs = list(docs_query.stream())
+        docs_count = len(all_docs)
+
+        if docs_count > 50:
+            # 삭제할 문서 수 계산
+            num_to_delete = docs_count - 50
+            docs_to_delete = all_docs[:num_to_delete]
+            
+            print(f"메시지 정리: {len(docs_to_delete)}개의 오래된 메시지를 삭제합니다.")
+
+            # 배치(batch) 삭제
+            batch = db.batch()
+            for doc in docs_to_delete:
+                batch.delete(doc.reference)
+            batch.commit()
+            print("메시지 정리 완료.")
+
+    except Exception as e:
+        print(f"백그라운드 메시지 정리 중 에러 발생: {e}")
+
+
 # 3. WebSocket 연결 관리
 class ConnectionManager:
     def __init__(self):
@@ -94,7 +126,7 @@ class Message(BaseModel):
 
 # [API 1] 메시지 전송 (저장) - HTTP 엔드포인트 (하위 호환성 유지)
 @app.post("/send")
-async def send_message(msg: Message):
+async def send_message(msg: Message, background_tasks: BackgroundTasks):
     doc_ref = db.collection("messages").document()
     timestamp = datetime.now()
     doc_id = doc_ref.id
@@ -114,6 +146,9 @@ async def send_message(msg: Message):
         "timestamp": timestamp.isoformat()
     }
     await manager.broadcast(message_data)
+    
+    # 백그라운드에서 오래된 메시지 정리 작업 추가
+    background_tasks.add_task(cleanup_old_messages)
     
     return {"status": "success"}
 
@@ -151,6 +186,14 @@ async def websocket_endpoint(websocket: WebSocket):
                 "timestamp": timestamp.isoformat()
             }
             await manager.broadcast(message_data)
+
+            # 백그라운드에서 오래된 메시지 정리 작업 추가
+            # WebSocket에서는 BackgroundTasks를 직접 주입받을 수 없으므로,
+            # FastAPI의 의존성 주입을 활용하지 않고 직접 생성하여 사용합니다.
+            background_tasks = BackgroundTasks()
+            background_tasks.add_task(cleanup_old_messages)
+            # 이 함수(websocket_endpoint)가 비동기이므로, 백그라운드 작업은
+            # FastAPI 이벤트 루프에 의해 실행됩니다.
             
     except WebSocketDisconnect:
         manager.disconnect(websocket)

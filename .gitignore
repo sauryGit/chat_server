@@ -18,3 +18,5 @@ secureKey.json
 SECRET_FILES_GUIDE.md
 README_copy.md
 DEPLOY.md
+.gemini/
+gha-creds-*.json
