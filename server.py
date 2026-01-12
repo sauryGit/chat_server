@@ -75,18 +75,18 @@ def cleanup_old_messages():
     try:
         messages_ref = db.collection("messages")
         
-        # 전체 메시지 수를 초과하는 가장 오래된 문서들을 가져옴
-        # timestamp를 기준으로 오름차순 정렬
-        docs_query = messages_ref.order_by("timestamp", direction=firestore.Query.ASCENDING)
-        
-        # 전체 문서 수를 가져오기 위해 모든 문서를 스트리밍
-        all_docs = list(docs_query.stream())
-        docs_count = len(all_docs)
+        # 1. 문서 개수를 효율적으로 확인 (Aggregation Query 사용)
+        # 전체 문서를 읽지 않고 개수만 가져옵니다 (비용 절감)
+        count_query = messages_ref.count()
+        count_snapshot = count_query.get()
+        docs_count = count_snapshot[0][0].value
 
         if docs_count > 50:
             # 삭제할 문서 수 계산
             num_to_delete = docs_count - 50
-            docs_to_delete = all_docs[:num_to_delete]
+            
+            # 삭제할 문서만 가져옴 (오래된 순)
+            docs_to_delete = messages_ref.order_by("timestamp", direction=firestore.Query.ASCENDING).limit(num_to_delete).get()
             
             print(f"메시지 정리: {len(docs_to_delete)}개의 오래된 메시지를 삭제합니다.")
 
