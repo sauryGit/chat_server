@@ -148,6 +148,7 @@ async def send_message(msg: Message, background_tasks: BackgroundTasks):
     # ... (existing code) ...
     # 화이트리스트 체크
     if not is_nickname_allowed(msg.nickname):
+        print(f"[SECURITY_ALERT] 무단 메시지 전송 시도 - 닉네임: {msg.nickname}")
         raise HTTPException(status_code=403, detail="등록되지 않은 닉네임입니다.")
 
     doc_ref = db.collection("messages").document()
@@ -195,8 +196,7 @@ async def websocket_endpoint(websocket: WebSocket):
         return
         
     if not is_nickname_allowed(nickname):
-        # 화이트리스트에 없으면 연결 거부 (403 Forbidden에 상응하는 code 사용)
-        print(f"연결 거부: {nickname} (화이트리스트 미포함)")
+        print(f"[SECURITY_ALERT] 무단 웹소켓 연결 시도 - 닉네임: {nickname}")
         await websocket.close(code=4003, reason="Forbidden nickname")
         return
 
@@ -254,7 +254,7 @@ def get_messages(request: FetchMessagesRequest):
 
     # 화이트리스트 체크
     if not is_nickname_allowed(nickname):
-        print(f"조회 거부: {nickname} (화이트리스트 미포함)")
+        print(f"[SECURITY_ALERT] 무단 메시지 조회 시도 - 닉네임: {nickname}")
         raise HTTPException(status_code=403, detail="등록되지 않은 닉네임입니다.")
 
     # after 파라미터가 있으면 해당 시간 이후의 메시지만 조회
