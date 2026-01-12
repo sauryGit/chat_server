@@ -5,6 +5,7 @@ import json
 import os
 import webbrowser
 import urllib.parse
+import random
 from datetime import datetime, timezone, timedelta
 
 # --- 서버 URL 설정 ---
@@ -312,12 +313,12 @@ async def main(page: ft.Page):
                     alignment=ft.MainAxisAlignment.CENTER,
                     spacing=10,
                 ),
-                bgcolor=ft.Colors.BLACK87,
-                padding=ft.padding.symmetric(vertical=15, horizontal=25),
+                bgcolor=ft.Colors.BLACK_87,
+                padding=ft.Padding.symmetric(vertical=15, horizontal=25),
                 border_radius=30,
                 opacity=1,
                 animate_opacity=1000, # 1초 동안 페이드 아웃
-                margin=ft.margin.only(top=50), # 상단 여백
+                margin=ft.Margin.only(top=50), # 상단 여백
             )
             
             # 중앙 정렬을 위한 Row 래퍼
@@ -393,6 +394,29 @@ async def main(page: ft.Page):
         # 특정 URL 설정 (원하시는 URL로 변경하세요)
         target_url = "https://bloob.io/yacht"
 
+        # 랜덤 텍스트 기능
+        random_texts = [
+            "오늘도 좋은 하루 보내세요!", "행복한 일이 가득하길!", "화이팅입니다!", 
+            "잠시 쉬어가는 여유를 가져보세요.", "맛있는 거 드시고 힘내세요!", 
+            "웃으면 복이 온대요.", "당신은 최고입니다!", "즐거운 채팅 되세요.",
+            "좋은 사람들과 좋은 시간!", "항상 응원합니다."
+        ]
+        random_text_display = ft.Text("", size=14)
+
+        def generate_random_text(e):
+            randint = random.randint(1,5)
+            if randint == 1:
+                random_text_display.value = "안전하게"
+            elif randint == 2:
+                random_text_display.value = "지금은 아니다"
+            elif randint == 3:
+                random_text_display.value = "소신대로"
+            elif randint == 4:
+                random_text_display.value = "지금이 기회다!"
+            elif randint == 5:
+                random_text_display.value = "지금 질러야한다"
+            page.update()
+
         page.add(
             ft.Row(
                 [
@@ -428,6 +452,15 @@ async def main(page: ft.Page):
                     message_input,
                     ft.IconButton(icon=ft.Icons.SEND, on_click=send_click, tooltip="전송"),
                 ]
+            ),
+            ft.Row(
+                [
+                    ft.ElevatedButton("책님의 조언", on_click=generate_random_text),
+                    random_text_display,
+                ],
+                alignment=ft.MainAxisAlignment.START,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=10
             ),
         )
         page.update()
