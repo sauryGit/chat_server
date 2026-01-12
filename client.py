@@ -78,9 +78,9 @@ async def main(page: ft.Page):
                 ft.Row(
                     [
                         ft.Container(
-                            content=ft.Text(content, size=12, color=ft.Colors.WHITE),
-                            bgcolor=ft.Colors.GREY_500,
-                            padding=ft.Padding(5, 2, 5, 2),
+                            content=ft.Text(content, size=14, color=ft.Colors.WHITE),
+                            bgcolor=ft.Colors.GREY_900,
+                            padding=ft.Padding(10, 4, 10, 4),
                             border_radius=10,
                         )
                     ],
@@ -320,7 +320,7 @@ async def main(page: ft.Page):
                 if elapsed > timedelta(minutes=8):
                     await perform_logout("8분 동안 활동이 없어 자동 로그아웃되었습니다.")
                     break
-            await asyncio.sleep(10) # 10초마다 확인
+            await asyncio.sleep(30) # 10초마다 확인
 
     # --- 화면 전환 함수 ---
 
@@ -519,7 +519,7 @@ async def main(page: ft.Page):
             ),
             ft.Row(
                 [
-                    ft.ElevatedButton("책님의 조언", on_click=generate_random_text),
+                    ft.Button("책님의 조언", on_click=generate_random_text),
                     random_text_display,
                 ],
                 alignment=ft.MainAxisAlignment.START,

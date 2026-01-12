@@ -35,6 +35,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    version='C:\\Users\\USER\\AppData\\Local\\Temp\\90ccacb7-6969-4705-a1e2-05de3fb5a7fc',
+    version='C:\\Users\\USER\\AppData\\Local\\Temp\\70588e40-0343-4695-86f3-761b440bf1f1',
     icon=['assets\\icons\\bamboo.ico'],
 )
