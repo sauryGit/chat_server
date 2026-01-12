@@ -1,19 +1,20 @@
-# server.py
+# ... imports
 import firebase_admin
 from firebase_admin import credentials, firestore
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 from datetime import datetime
 import uvicorn
 import json
-from typing import Set
+import urllib.parse
+from typing import Set, Optional
 
 # 1. Firebase 초기화 (보안 키 로드)
-# 환경 변수에서 Firebase 키를 로드 (Render 배포용)
-# 로컬에서는 secureKey.json 파일 사용
+# ... (Firebase init code remains same) ...
 import os
 
 def init_firebase():
+    # ... (existing init_firebase code) ...
     # 1. Render Secret Files에서 로드 시도 (우선순위 1)
     firebase_key_path = os.getenv("FIREBASE_KEY_PATH", "/etc/secrets/firebase-key.json")
     if os.path.exists(firebase_key_path):
@@ -53,12 +54,24 @@ def init_firebase():
 init_firebase()
 db = firestore.client()
 
+# --- 화이트리스트 설정 ---
+# 환경 변수 CHAT_WHITELIST가 설정되어 있으면 해당 닉네임만 허용
+# 예: CHAT_WHITELIST="홍길동,김철수,이영희"
+CHAT_WHITELIST_STR = os.getenv("CHAT_WHITELIST")
+CHAT_WHITELIST = set([n.strip() for n in CHAT_WHITELIST_STR.split(",") if n.strip()]) if CHAT_WHITELIST_STR is not None else None
+
+def is_nickname_allowed(nickname: str) -> bool:
+    """닉네임이 화이트리스트에 있는지 확인"""
+    if CHAT_WHITELIST is None:
+        return True # 화이트리스트 설정이 없으면 모두 허용
+    return nickname in CHAT_WHITELIST
+
 # 2. FastAPI 앱 생성
 app = FastAPI()
 
 # --- 백그라운드 작업 ---
 def cleanup_old_messages():
-    """DB에서 가장 오래된 메시지를 삭제하여 50개만 남기는 함수"""
+    # ... (existing cleanup_old_messages code) ...
     try:
         messages_ref = db.collection("messages")
         
@@ -90,6 +103,7 @@ def cleanup_old_messages():
 
 # 3. WebSocket 연결 관리
 class ConnectionManager:
+    # ... (existing ConnectionManager code) ...
     def __init__(self):
         # 활성 WebSocket 연결 목록
         self.active_connections: Set[WebSocket] = set()
@@ -124,9 +138,18 @@ class Message(BaseModel):
     nickname: str
     content: str
 
+class FetchMessagesRequest(BaseModel):
+    nickname: str
+    after: Optional[str] = None
+
 # [API 1] 메시지 전송 (저장) - HTTP 엔드포인트 (하위 호환성 유지)
 @app.post("/send")
 async def send_message(msg: Message, background_tasks: BackgroundTasks):
+    # ... (existing code) ...
+    # 화이트리스트 체크
+    if not is_nickname_allowed(msg.nickname):
+        raise HTTPException(status_code=403, detail="등록되지 않은 닉네임입니다.")
+
     doc_ref = db.collection("messages").document()
     doc_id = doc_ref.id
     
@@ -154,6 +177,29 @@ async def send_message(msg: Message, background_tasks: BackgroundTasks):
 # [WebSocket] 실시간 채팅 연결
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    # 헤더에서 닉네임 추출 (보안 강화)
+    nickname_header = websocket.headers.get("x-nickname")
+    nickname = None
+    if nickname_header:
+        # 헤더 값은 URL 인코딩되어 있을 수 있으므로 디코딩
+        nickname = urllib.parse.unquote(nickname_header)
+    
+    # 헤더에 없으면 쿼리 파라미터에서 확인 (하위 호환성)
+    if not nickname:
+        nickname = websocket.query_params.get("nickname")
+
+    # 닉네임 파라미터 확인 및 화이트리스트 체크
+    if nickname is None:
+        # 닉네임이 없으면 연결 거부 (400 Bad Request)
+        await websocket.close(code=4000, reason="Nickname required")
+        return
+        
+    if not is_nickname_allowed(nickname):
+        # 화이트리스트에 없으면 연결 거부 (403 Forbidden에 상응하는 code 사용)
+        print(f"연결 거부: {nickname} (화이트리스트 미포함)")
+        await websocket.close(code=4003, reason="Forbidden nickname")
+        return
+
     await manager.connect(websocket)
     try:
         while True:
@@ -165,6 +211,11 @@ async def websocket_endpoint(websocket: WebSocket):
             if "nickname" not in message_dict or "content" not in message_dict:
                 await websocket.send_json({"error": "잘못된 메시지 형식"})
                 continue
+
+            # 메시지 전송 시 닉네임 재검증 (변조 방지)
+            if message_dict["nickname"] != nickname:
+                 await websocket.send_json({"error": "닉네임 불일치"})
+                 continue
             
             # Firestore에 저장 (서버 타임스탬프 사용)
             doc_ref = db.collection("messages").document()
@@ -186,12 +237,8 @@ async def websocket_endpoint(websocket: WebSocket):
             await manager.broadcast(message_data)
 
             # 백그라운드에서 오래된 메시지 정리 작업 추가
-            # WebSocket에서는 BackgroundTasks를 직접 주입받을 수 없으므로,
-            # FastAPI의 의존성 주입을 활용하지 않고 직접 생성하여 사용합니다.
             background_tasks = BackgroundTasks()
             background_tasks.add_task(cleanup_old_messages)
-            # 이 함수(websocket_endpoint)가 비동기이므로, 백그라운드 작업은
-            # FastAPI 이벤트 루프에 의해 실행됩니다.
             
     except WebSocketDisconnect:
         manager.disconnect(websocket)
@@ -200,8 +247,16 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 # [API 2] 메시지 목록 조회 (최신 30개)
-@app.get("/messages")
-def get_messages(after: str = Query(None, description="이 타임스탬프 이후의 메시지만 조회")):
+@app.post("/messages")
+def get_messages(request: FetchMessagesRequest):
+    nickname = request.nickname
+    after = request.after
+
+    # 화이트리스트 체크
+    if not is_nickname_allowed(nickname):
+        print(f"조회 거부: {nickname} (화이트리스트 미포함)")
+        raise HTTPException(status_code=403, detail="등록되지 않은 닉네임입니다.")
+
     # after 파라미터가 있으면 해당 시간 이후의 메시지만 조회
     if after:
         try:
@@ -231,6 +286,9 @@ def get_messages(after: str = Query(None, description="이 타임스탬프 이�
         results.append(data)
     
     return results
+
+# 서버 실행
+# ...
 
 # 서버 실행
 # Render에서는 PORT 환경 변수를 사용

@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import webbrowser
+import urllib.parse
 from datetime import datetime, timezone, timedelta
 
 # --- 서버 URL 설정 ---
@@ -140,8 +141,10 @@ async def main(page: ft.Page):
     async def load_initial_messages():
         """서버에서 초기 메시지를 로드하는 함수"""
         try:
+            # 닉네임을 JSON Body로 전달하여 화이트리스트 검증 수행 (POST)
+            payload = {"nickname": user_nickname[0]}
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"{SERVER_URL}/messages") as resp:
+                async with session.post(f"{SERVER_URL}/messages", json=payload) as resp:
                     if resp.status == 200:
                         messages = await resp.json()
                         for msg in messages:
@@ -151,6 +154,10 @@ async def main(page: ft.Page):
                                 msg.get("content", "..."),
                                 msg.get("timestamp"),
                             )
+                    elif resp.status == 403:
+                         print("접근 권한이 없습니다 (화이트리스트 제한).")
+                    else:
+                        print(f"메시지 로드 실패. Status: {resp.status}")
                     page.update()
 
         except Exception as e:
@@ -163,7 +170,13 @@ async def main(page: ft.Page):
             if ws_connection[0] is None or ws_connection[0].closed:
                 try:
                     session = aiohttp.ClientSession()
-                    ws = await session.ws_connect(WS_URL)
+                    
+                    # 닉네임을 헤더에 추가 (URL 인코딩하여 전송)
+                    # 한글 닉네임 등을 안전하게 전송하기 위함
+                    encoded_nickname = urllib.parse.quote(user_nickname[0])
+                    headers = {"x-nickname": encoded_nickname}
+                    
+                    ws = await session.ws_connect(WS_URL, headers=headers)
                     ws_connection[0] = ws
                     print("WebSocket 연결됨")
                     
