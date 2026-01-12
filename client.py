@@ -433,10 +433,14 @@ async def main(page: ft.Page):
             "웃으면 복이 온대요.", "당신은 최고입니다!", "즐거운 채팅 되세요.",
             "좋은 사람들과 좋은 시간!", "항상 응원합니다."
         ]
-        random_text_display = ft.Text("", size=14)
+        # 애니메이션 효과 추가 (1초 동안 페이드 아웃)
+        random_text_display = ft.Text("", size=14, opacity=1, animate_opacity=850, weight=ft.FontWeight.BOLD)
 
-        def generate_random_text(e):
+        async def generate_random_text(e):
             randint = random.randint(1,5)
+            # 텍스트가 보이도록 투명도 초기화
+            random_text_display.opacity = 1
+            
             if randint == 1:
                 random_text_display.value = "안전하게"
             elif randint == 2:
@@ -447,6 +451,12 @@ async def main(page: ft.Page):
                 random_text_display.value = "지금이 기회다!"
             elif randint == 5:
                 random_text_display.value = "지금 질러야한다"
+            
+            page.update()
+            
+            # 4초 대기 후 페이드 아웃
+            await asyncio.sleep(1)
+            random_text_display.opacity = 0
             page.update()
 
         page.add(
