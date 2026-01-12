@@ -8,6 +8,8 @@ import urllib.parse
 import random
 from datetime import datetime, timezone, timedelta
 
+# uv run flet pack client.py --name "BambooForest" --icon "assets/icons/bamboo.ico" --add-data "assets;assets"
+
 # --- 서버 URL 설정 ---
 RENDER_SERVER_URL = os.getenv("RENDER_SERVER_URL", "https://chat-server-x4o4.onrender.com")
 SERVER_URL = RENDER_SERVER_URL
@@ -454,8 +456,8 @@ async def main(page: ft.Page):
             
             page.update()
             
-            # 4초 대기 후 페이드 아웃
-            await asyncio.sleep(1)
+            # 1.8초 대기 후 페이드 아웃
+            await asyncio.sleep(1.8)
             random_text_display.opacity = 0
             page.update()
 
