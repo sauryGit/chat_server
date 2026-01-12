@@ -65,12 +65,30 @@ async def main(page: ft.Page):
 
     # --- 함수 정의 ---
 
-    def display_message(msg_id: str, nickname: str, content: str, timestamp: str = None):
+    def display_message(msg_id: str, nickname: str, content: str, timestamp: str = None, msg_type: str = "user"):
         """채팅 메시지를 화면에 표시하는 함수"""
         if msg_id and msg_id in seen_message_ids:
             return
         if msg_id:
             seen_message_ids.add(msg_id)
+
+        # 시스템 메시지 처리
+        if msg_type == "system":
+            chat_list.controls.append(
+                ft.Row(
+                    [
+                        ft.Container(
+                            content=ft.Text(content, size=12, color=ft.Colors.WHITE),
+                            bgcolor=ft.Colors.GREY_500,
+                            padding=ft.Padding(5, 2, 5, 2),
+                            border_radius=10,
+                        )
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                )
+            )
+            page.update()
+            return
 
         is_me = nickname == user_nickname[0]
         
@@ -165,32 +183,33 @@ async def main(page: ft.Page):
         )
         page.update()
 
-    async def load_initial_messages():
-        """서버에서 초기 메시지를 로드하는 함수"""
-        try:
-            # 닉네임을 JSON Body로 전달하여 화이트리스트 검증 수행 (POST)
-            payload = {"nickname": user_nickname[0]}
-            async with aiohttp.ClientSession() as session:
-                async with session.post(f"{SERVER_URL}/messages", json=payload) as resp:
-                    if resp.status == 200:
-                        messages = await resp.json()
-                        for msg in messages:
-                            display_message(
-                                msg.get("id", ""),
-                                msg.get("nickname", "알 수 없음"),
-                                msg.get("content", "..."),
-                                msg.get("timestamp"),
-                            )
-                    elif resp.status == 403:
-                         print("접근 권한이 없습니다 (화이트리스트 제한).")
-                         await perform_logout("등록되지 않은 닉네임입니다.")
-                         return
-                    else:
-                        print(f"메시지 로드 실패. Status: {resp.status}")
-                    page.update()
+    # async def load_initial_messages():
+    #     """서버에서 초기 메시지를 로드하는 함수"""
+    #     try:
+    #         # 닉네임을 JSON Body로 전달하여 화이트리스트 검증 수행 (POST)
+    #         payload = {"nickname": user_nickname[0]}
+    #         async with aiohttp.ClientSession() as session:
+    #             async with session.post(f"{SERVER_URL}/messages", json=payload) as resp:
+    #                 if resp.status == 200:
+    #                     messages = await resp.json()
+    #                     for msg in messages:
+    #                         display_message(
+    #                             msg.get("id", ""),
+    #                             msg.get("nickname", "알 수 없음"),
+    #                             msg.get("content", "..."),
+    #                             msg.get("timestamp"),
+    #                             msg.get("type", "user"),
+    #                         )
+    #                 elif resp.status == 403:
+    #                      print("접근 권한이 없습니다 (화이트리스트 제한).")
+    #                      await perform_logout("등록되지 않은 닉네임입니다.")
+    #                      return
+    #                 else:
+    #                     print(f"메시지 로드 실패. Status: {resp.status}")
+    #                 page.update()
 
-        except Exception as e:
-            print(f"초기 메시지 로드 에러: {e}")
+    #     except Exception as e:
+    #         print(f"초기 메시지 로드 에러: {e}")
 
     async def websocket_listener():
         """WebSocket 연결 및 메시지 수신을 처리하는 리스너"""
@@ -209,8 +228,8 @@ async def main(page: ft.Page):
                     ws_connection[0] = ws
                     print("WebSocket 연결됨")
                     
-                    # 연결 후 초기 메시지 로드
-                    await load_initial_messages()
+                    # 연결 후 초기 메시지 로드 (비활성화)
+                    # await load_initial_messages()
                     # 초기 메시지 로드 중 로그아웃(화이트리스트 거부 등)되면 리스너 종료
                     if user_nickname[0] is None:
                         return
@@ -253,6 +272,7 @@ async def main(page: ft.Page):
                             message_data.get("nickname", "알 수 없음"),
                             message_data.get("content", "..."),
                             message_data.get("timestamp"),
+                            message_data.get("type", "user"), # 타입 전달
                         )
                     except json.JSONDecodeError:
                         print(f"JSON 파싱 에러: {msg.data}")

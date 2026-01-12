@@ -105,17 +105,29 @@ def cleanup_old_messages():
 class ConnectionManager:
     # ... (existing ConnectionManager code) ...
     def __init__(self):
-        # 활성 WebSocket 연결 목록
-        self.active_connections: Set[WebSocket] = set()
+        # 활성 WebSocket 연결 목록 (WebSocket 객체: 닉네임)
+        self.active_connections: dict[WebSocket, str] = {}
     
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, nickname: str):
         await websocket.accept()
-        self.active_connections.add(websocket)
-        print(f"클라이언트 연결됨. 현재 연결 수: {len(self.active_connections)}")
+        self.active_connections[websocket] = nickname
+        print(f"클라이언트 연결됨 ({nickname}). 현재 연결 수: {len(self.active_connections)}")
+        
+        # 입장 알림 브로드캐스트 (시스템 메시지)
+        await self.broadcast({
+            "type": "system",
+            "content": f"{nickname}님이 입장하셨습니다."
+        })
     
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.discard(websocket)
-        print(f"클라이언트 연결 해제됨. 현재 연결 수: {len(self.active_connections)}")
+    async def disconnect(self, websocket: WebSocket):
+        nickname = self.active_connections.pop(websocket, "알 수 없음")
+        print(f"클라이언트 연결 해제됨 ({nickname}). 현재 연결 수: {len(self.active_connections)}")
+        
+        # 퇴장 알림 브로드캐스트 (시스템 메시지)
+        await self.broadcast({
+            "type": "system",
+            "content": f"{nickname}님이 퇴장하셨습니다."
+        })
     
     async def broadcast(self, message: dict):
         # 모든 연결된 클라이언트에 메시지 브로드캐스팅
@@ -127,9 +139,11 @@ class ConnectionManager:
                 print(f"메시지 전송 실패: {e}")
                 disconnected.append(connection)
         
-        # 연결이 끊어진 클라이언트 제거
+        # 연결이 끊어진 클라이언트 제거 (반복문 중 딕셔너리 변경 방지 위해 별도 처리)
         for connection in disconnected:
-            self.disconnect(connection)
+            # 재귀 호출 방지를 위해 active_connections에서 직접 제거만 수행
+             if connection in self.active_connections:
+                del self.active_connections[connection]
 
 manager = ConnectionManager()
 
@@ -163,6 +177,7 @@ async def send_message(msg: Message, background_tasks: BackgroundTasks):
     
     # WebSocket으로 모든 클라이언트에 브로드캐스팅
     message_data = {
+        "type": "user",
         "id": doc_id,
         "nickname": msg.nickname,
         "content": msg.content,
@@ -200,7 +215,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close(code=4003, reason="Forbidden nickname")
         return
 
-    await manager.connect(websocket)
+    await manager.connect(websocket, nickname)
     try:
         while True:
             # 클라이언트로부터 메시지 수신
@@ -229,6 +244,7 @@ async def websocket_endpoint(websocket: WebSocket):
             
             # 모든 클라이언트에 브로드캐스팅
             message_data = {
+                "type": "user",
                 "id": doc_id,
                 "nickname": message_dict["nickname"],
                 "content": message_dict["content"],
@@ -241,10 +257,10 @@ async def websocket_endpoint(websocket: WebSocket):
             background_tasks.add_task(cleanup_old_messages)
             
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        await manager.disconnect(websocket)
     except Exception as e:
         print(f"WebSocket 에러: {e}")
-        manager.disconnect(websocket)
+        await manager.disconnect(websocket)
 
 # [API 2] 메시지 목록 조회 (최신 30개)
 @app.post("/messages")
