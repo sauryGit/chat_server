@@ -40,10 +40,22 @@ async def main(page: ft.Page):
     # WebSocket 연결, 리스너 태스크, 닉네임 등을 관리
     ws_connection = [None]
     ws_listener_task = [None]
+    inactivity_task = [None]
     user_nickname = [None]
+    last_active_time = [datetime.now()]
     
     # 이미 표시된 메시지 ID (중복 방지)
     seen_message_ids = set()
+
+    # --- 활동 감지 ---
+    def update_activity(e=None):
+        """사용자 활동이 감지되면 시간을 갱신"""
+        last_active_time[0] = datetime.now()
+
+    # 페이지 전역 이벤트에 활동 감지 연결
+    page.on_keyboard_event = update_activity
+    page.on_tap = update_activity
+    page.on_scroll = update_activity
 
     # --- UI 요소 ---
     chat_list = ft.ListView(expand=True, spacing=10, auto_scroll=True)
@@ -278,6 +290,16 @@ async def main(page: ft.Page):
 
     message_input.on_submit = send_click
 
+    async def monitor_inactivity():
+        """8분 이상 활동이 없으면 자동 로그아웃"""
+        while True:
+            if user_nickname[0]: # 로그인 상태일 때만 체크
+                elapsed = datetime.now() - last_active_time[0]
+                if elapsed > timedelta(minutes=8):
+                    await perform_logout("8분 동안 활동이 없어 자동 로그아웃되었습니다.")
+                    break
+            await asyncio.sleep(10) # 10초마다 확인
+
     # --- 화면 전환 함수 ---
 
     async def perform_logout(error_message: str = None):
@@ -287,6 +309,11 @@ async def main(page: ft.Page):
         if ws_listener_task[0] and ws_listener_task[0] != asyncio.current_task():
             ws_listener_task[0].cancel()
         ws_listener_task[0] = None
+
+        # 활동 모니터링 태스크 중지
+        if inactivity_task[0]:
+            inactivity_task[0].cancel()
+        inactivity_task[0] = None
         
         # WebSocket 연결 종료
         if ws_connection[0]:
@@ -358,6 +385,11 @@ async def main(page: ft.Page):
         # WebSocket 리스너 시작
         if ws_listener_task[0] is None:
             ws_listener_task[0] = asyncio.create_task(websocket_listener())
+
+        # 활동 시간 초기화 및 모니터링 시작
+        last_active_time[0] = datetime.now()
+        if inactivity_task[0] is None:
+            inactivity_task[0] = asyncio.create_task(monitor_inactivity())
 
     async def logout_click(e):
         """로그아웃 버튼 클릭 이벤트 핸들러"""
