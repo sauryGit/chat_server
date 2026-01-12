@@ -70,16 +70,17 @@ async def main(page: ft.Page):
         else:
             # 라이트 모드용 팔레트 (기존)
             light_palette = [
-                ft.Colors.CYAN_400, ft.Colors.PINK_400, ft.Colors.PURPLE_400,
+                ft.Colors.INDIGO_400, ft.Colors.PINK_400, ft.Colors.PURPLE_400,
                 ft.Colors.DEEP_PURPLE_400, ft.Colors.INDIGO_400, ft.Colors.CYAN_400,
                 ft.Colors.TEAL_400, ft.Colors.GREEN_400, ft.Colors.LIME_400,
                 ft.Colors.AMBER_400, ft.Colors.ORANGE_400, ft.Colors.BROWN_400,
                 ft.Colors.BLUE_GREY_400,
             ]
             
+            
             # 다크 모드용 팔레트 (톤 다운된 색상)
             dark_palette = [
-                ft.Colors.CYAN_900, ft.Colors.PINK_900, ft.Colors.PURPLE_900,
+                ft.Colors.INDIGO_700, ft.Colors.PINK_900, ft.Colors.PURPLE_900,
                 ft.Colors.DEEP_PURPLE_900, ft.Colors.INDIGO_900, ft.Colors.CYAN_900,
                 ft.Colors.TEAL_900, ft.Colors.GREEN_900, ft.Colors.LIME_900,
                 ft.Colors.AMBER_900, ft.Colors.ORANGE_900, ft.Colors.BROWN_900,
@@ -92,7 +93,9 @@ async def main(page: ft.Page):
             bg_color = current_palette[color_index]
 
         text_color = ft.Colors.WHITE
-        
+        # 테마 모드에 따른 닉네임 색상 설정 (다크: 밝게, 라이트: 어둡게)
+        nickname_color = ft.Colors.WHITE if is_dark_mode else ft.Colors.BLACK
+
         # 시간 포맷팅
         time_str = ""
         if timestamp:
@@ -113,7 +116,16 @@ async def main(page: ft.Page):
                 time_str = ""
 
 
-        header_controls = [ft.Text(nickname, size=14, color=ft.Colors.BLACK_87, weight=ft.FontWeight.BOLD, selectable=True)]
+        header_controls = [
+            ft.Text(
+                nickname, 
+                size=15, 
+                color=nickname_color, 
+                weight=ft.FontWeight.NORMAL, 
+                selectable=True,
+                
+            )
+        ]
         if time_str:
             header_controls.append(ft.Text(time_str, size=12, color=ft.Colors.BLACK_45, selectable=True))
 
@@ -156,6 +168,8 @@ async def main(page: ft.Page):
                             )
                     elif resp.status == 403:
                          print("접근 권한이 없습니다 (화이트리스트 제한).")
+                         await perform_logout("등록되지 않은 닉네임입니다.")
+                         return
                     else:
                         print(f"메시지 로드 실패. Status: {resp.status}")
                     page.update()
@@ -182,6 +196,30 @@ async def main(page: ft.Page):
                     
                     # 연결 후 초기 메시지 로드
                     await load_initial_messages()
+                    # 초기 메시지 로드 중 로그아웃(화이트리스트 거부 등)되면 리스너 종료
+                    if user_nickname[0] is None:
+                        return
+
+                except aiohttp.WSServerHandshakeError as e:
+                    if e.status == 403:
+                         print("접근 권한이 없습니다 (화이트리스트 제한 - WebSocket).")
+                         await session.close()
+                         ws_connection[0] = None
+                         await perform_logout("등록되지 않은 닉네임입니다.")
+                         return
+                    print(f"WebSocket 핸드쉐이크 에러: {e}")
+                    await session.close()
+                    ws_connection[0] = None
+                    await asyncio.sleep(2)
+                    continue
+
+                except aiohttp.ClientConnectorError as e:
+                    print(f"서버 연결 실패: {e}")
+                    await session.close()
+                    ws_connection[0] = None
+                    await perform_logout("서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.")
+                    return
+
                 except Exception as e:
                     print(f"WebSocket 연결 에러: {e}")
                     await session.close() # 세션 정리
@@ -204,6 +242,11 @@ async def main(page: ft.Page):
                     except json.JSONDecodeError:
                         print(f"JSON 파싱 에러: {msg.data}")
                 elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
+                    # 화이트리스트 거부 (4003) 확인
+                    if ws_connection[0].close_code == 4003:
+                        await perform_logout("등록되지 않은 닉네임입니다.")
+                        return
+
                     print("WebSocket 연결 끊어짐")
                     await ws_connection[0].close()
                     ws_connection[0] = None
@@ -236,6 +279,69 @@ async def main(page: ft.Page):
 
     # --- 화면 전환 함수 ---
 
+    async def perform_logout(error_message: str = None):
+        """로그아웃 처리 및 로그인 화면으로 이동"""
+        # WebSocket 리스너 중지
+        # 현재 실행 중인 태스크(자신)가 아닐 때만 취소
+        if ws_listener_task[0] and ws_listener_task[0] != asyncio.current_task():
+            ws_listener_task[0].cancel()
+        ws_listener_task[0] = None
+        
+        # WebSocket 연결 종료
+        if ws_connection[0]:
+            await ws_connection[0].close()
+            ws_connection[0] = None
+            print("WebSocket 연결 종료됨")
+
+        # 상태 초기화
+        user_nickname[0] = None
+        seen_message_ids.clear()
+        chat_list.controls.clear()
+        
+        page.clean()
+        build_login_view() # 로그인 화면 구성
+
+        # 에러 메시지가 있으면 커스텀 페이드아웃 알림 표시
+        if error_message:
+            notification = ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(ft.Icons.INFO_OUTLINE, color=ft.Colors.WHITE),
+                        ft.Text(error_message, color=ft.Colors.WHITE, weight=ft.FontWeight.W_500),
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    spacing=10,
+                ),
+                bgcolor=ft.Colors.BLACK87,
+                padding=ft.padding.symmetric(vertical=15, horizontal=25),
+                border_radius=30,
+                opacity=1,
+                animate_opacity=1000, # 1초 동안 페이드 아웃
+                margin=ft.margin.only(top=50), # 상단 여백
+            )
+            
+            # 중앙 정렬을 위한 Row 래퍼
+            overlay_wrapper = ft.Row(
+                [notification],
+                alignment=ft.MainAxisAlignment.CENTER,
+            )
+            
+            page.overlay.append(overlay_wrapper)
+            page.update()
+            
+            # 2.5초 대기 후 페이드 아웃 시작
+            await asyncio.sleep(2.5)
+            notification.opacity = 0
+            page.update()
+            
+            # 애니메이션 완료 후 제거
+            await asyncio.sleep(1.1)
+            if overlay_wrapper in page.overlay:
+                page.overlay.remove(overlay_wrapper)
+            page.update()
+        
+        page.update()
+
     async def login_click(e):
         """로그인 버튼 클릭 이벤트 핸들러"""
         nickname = nickname_input.value.strip()
@@ -254,24 +360,7 @@ async def main(page: ft.Page):
 
     async def logout_click(e):
         """로그아웃 버튼 클릭 이벤트 핸들러"""
-        # WebSocket 리스너 중지
-        if ws_listener_task[0]:
-            ws_listener_task[0].cancel()
-            ws_listener_task[0] = None
-        
-        # WebSocket 연결 종료
-        if ws_connection[0]:
-            await ws_connection[0].close()
-            ws_connection[0] = None
-            print("WebSocket 연결 종료됨")
-
-        # 상태 초기화
-        user_nickname[0] = None
-        seen_message_ids.clear()
-        chat_list.controls.clear()
-        
-        page.clean()
-        build_login_view() # 로그인 화면 구성
+        await perform_logout()
 
     # --- UI 구성 함수 ---
 
