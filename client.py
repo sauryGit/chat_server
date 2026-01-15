@@ -312,15 +312,15 @@ async def main(page: ft.Page):
 
     message_input.on_submit = send_click
 
-    async def monitor_inactivity():
-        """8분 이상 활동이 없으면 자동 로그아웃"""
-        while True:
-            if user_nickname[0]: # 로그인 상태일 때만 체크
-                elapsed = datetime.now() - last_active_time[0]
-                if elapsed > timedelta(minutes=8):
-                    await perform_logout("8분 동안 활동이 없어 자동 로그아웃되었습니다.")
-                    break
-            await asyncio.sleep(30) # 10초마다 확인
+    # async def monitor_inactivity():
+    #     """8분 이상 활동이 없으면 자동 로그아웃"""
+    #     while True:
+    #         if user_nickname[0]: # 로그인 상태일 때만 체크
+    #             elapsed = datetime.now() - last_active_time[0]
+    #             if elapsed > timedelta(minutes=8):
+    #                 await perform_logout("8분 동안 활동이 없어 자동 로그아웃되었습니다.")
+    #                 break
+    #         await asyncio.sleep(30) # 10초마다 확인
 
     # --- 화면 전환 함수 ---
 
@@ -409,9 +409,9 @@ async def main(page: ft.Page):
             ws_listener_task[0] = asyncio.create_task(websocket_listener())
 
         # 활동 시간 초기화 및 모니터링 시작
-        last_active_time[0] = datetime.now()
-        if inactivity_task[0] is None:
-            inactivity_task[0] = asyncio.create_task(monitor_inactivity())
+        # last_active_time[0] = datetime.now()
+        # if inactivity_task[0] is None:
+        #     inactivity_task[0] = asyncio.create_task(monitor_inactivity())
 
     async def logout_click(e):
         """로그아웃 버튼 클릭 이벤트 핸들러"""
